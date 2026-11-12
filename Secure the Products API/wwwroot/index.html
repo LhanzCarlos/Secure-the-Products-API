@@ -1,0 +1,249 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Products API</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 850px;
+            margin: 30px auto;
+            padding: 20px;
+            background: #f4f4f4;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px 0;
+        }
+
+        input {
+            width: 95%;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        #message {
+            font-weight: bold;
+        }
+
+        .product {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Secure Products API</h1>
+
+    <section>
+        <h2>Register</h2>
+        <input type="text" id="registerUsername" placeholder="Username">
+        <input type="password" id="registerPassword" placeholder="Password">
+        <button onclick="register()">Register</button>
+    </section>
+
+    <section>
+        <h2>Login</h2>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <input type="password" id="loginPassword" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <button onclick="logout()">Logout</button>
+        <p id="currentUser">Not logged in</p>
+    </section>
+
+    <section>
+        <h2>Add Product (Admin Only)</h2>
+        <input type="text" id="productName" placeholder="Product Name">
+        <input type="number" id="productPrice" placeholder="Price">
+        <input type="number" id="productStock" placeholder="Stock">
+        <button onclick="addProduct()">Add Product</button>
+    </section>
+
+    <section>
+        <h2>Products</h2>
+        <button onclick="loadProducts()">Refresh Products</button>
+        <div id="products"></div>
+    </section>
+
+    <p id="message"></p>
+
+    <script>const API_URL = "/api";
+
+        function showMessage(message) {
+            document.getElementById("message").textContent = message;
+        }
+
+        function updateUserDisplay() {
+            const username = localStorage.getItem("username");
+            document.getElementById("currentUser").textContent =
+                username ? "Logged in as: " + username : "Not logged in";
+        }
+
+        async function authFetch(url, options = {}) {
+            const token = localStorage.getItem("token");
+
+            options.headers = {
+                ...options.headers,
+                "Content-Type": "application/json"
+            };
+
+            if (token) {
+                options.headers.Authorization = "Bearer " + token;
+            }
+
+            return fetch(url, options);
+        }
+
+        async function register() {
+            const username = document.getElementById("registerUsername").value;
+            const password = document.getElementById("registerPassword").value;
+
+            try {
+                const response = await fetch(API_URL + "/Auth/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: username,
+                        passwordHash: password
+                    })
+                });
+
+                const data = await response.json();
+                showMessage(data.message || "Registration status: " + response.status);
+            } catch (error) {
+                showMessage("Registration failed: " + error.message);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById("loginUsername").value;
+            const password = document.getElementById("loginPassword").value;
+
+            try {
+                const response = await fetch(API_URL + "/Auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: username,
+                        passwordHash: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem("token", data.token);
+                    localStorage.setItem("username", username);
+                    updateUserDisplay();
+                    showMessage("Login successful!");
+                    loadProducts();
+                } else {
+                    showMessage(data.message || "Login failed: " + response.status);
+                }
+            } catch (error) {
+                showMessage("Login failed: " + error.message);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("username");
+            updateUserDisplay();
+            showMessage("Logged out successfully.");
+        }
+
+        async function loadProducts() {
+            try {
+                const response = await fetch(API_URL + "/Products");
+                const products = await response.json();
+
+                const container = document.getElementById("products");
+                container.innerHTML = "";
+
+                products.forEach(product => {
+                    const item = document.createElement("div");
+                    item.className = "product";
+
+                    const details = document.createElement("span");
+                    details.textContent =
+                        product.name + " - ₱" + product.price +
+                        " | Stock: " + product.stock + " ";
+
+                    const deleteButton = document.createElement("button");
+                    deleteButton.textContent = "Delete";
+                    deleteButton.onclick = () => deleteProduct(product.id);
+
+                    item.appendChild(details);
+                    item.appendChild(deleteButton);
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                showMessage("Could not load products: " + error.message);
+            }
+        }
+
+        async function addProduct() {
+            const product = {
+                name: document.getElementById("productName").value,
+                price: Number(document.getElementById("productPrice").value),
+                stock: Number(document.getElementById("productStock").value)
+            };
+
+            try {
+                const response = await authFetch(API_URL + "/Products", {
+                    method: "POST",
+                    body: JSON.stringify(product)
+                });
+
+                if (response.ok) {
+                    showMessage("Product added successfully!");
+                    loadProducts();
+                } else {
+                    showMessage("Add product failed: " + response.status);
+                }
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        async function deleteProduct(id) {
+            try {
+                const response = await authFetch(API_URL + "/Products/" + id, {
+                    method: "DELETE"
+                });
+
+                if (response.status === 204) {
+                    showMessage("Product deleted successfully!");
+                    loadProducts();
+                } else {
+                    showMessage("Delete failed: " + response.status);
+                }
+            } catch (error) {
+                showMessage("Error: " + error.message);
+            }
+        }
+
+        updateUserDisplay();
+        loadProducts();</script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+@Secure_the_Products_API_HostAddress = http://localhost:5226
+
+GET {{Secure_the_Products_API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
